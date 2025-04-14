@@ -1,90 +1,107 @@
-﻿namespace Evaluator.Logic;
+﻿using System.Globalization;
+using System.Text;
+
+namespace Evaluator.Logic;
 
 public class FunctionEvaluator
 {
     public static double Evalute(string infix)
     {
-        var postfix = ToPostfix(infix);
-        return Calculate(postfix);
+        var postfix = ToPostfix(infix); 
+        return Calculate(postfix);     
     }
 
-    private static double Calculate(string postfix)
+    // Parameter type changed from string to List<string>
+    private static double Calculate(List<string> postfix)
     {
         var stack = new Stack<double>();
-        foreach (var item in postfix)
+
+        foreach (var token in postfix)
         {
-            if (IsOperator(item))
+            // Added this to recognize multi-digit and decimal numbers
+            if (double.TryParse(token, NumberStyles.Any, CultureInfo.InvariantCulture, out double number))
             {
-                var operator2 = stack.Pop();
-                var operator1 = stack.Pop();
-                stack.Push(Result(operator1, item, operator2));
+                stack.Push(number); // Push number to stack
             }
-            else
+            else if (IsOperator(token)) // Added this to check for operators
             {
-                stack.Push(char.GetNumericValue(item));
+                var operand2 = stack.Pop();
+                var operand1 = stack.Pop();
+                stack.Push(Result(operand1, token, operand2));  // Modified to use string as operator
             }
         }
+
         return stack.Pop();
     }
 
-    private static double Result(double operator1, char item, double operator2)
+    // Changed operator type to string
+    private static double Result(double operand1, string op, double operand2)
     {
-        return item switch
+        return op switch
         {
-            '+' => operator1 + operator2,
-            '-' => operator1 - operator2,
-            '*' => operator1 * operator2,
-            '/' => operator1 / operator2,
-            '^' => Math.Pow(operator1, operator2),
-            _ => throw new Exception("Invalid expresion"),
+            "+" => operand1 + operand2,
+            "-" => operand1 - operand2,
+            "*" => operand1 * operand2,
+            "/" => operand1 / operand2,
+            "^" => Math.Pow(operand1, operand2),
+            _ => throw new Exception("Invalid operator"),
         };
     }
 
-    private static string ToPostfix(string infix)
+    // Changed return type to List<string>
+    private static List<string> ToPostfix(string infix)
     {
-        var stack = new Stack<char>();
-        var postfix = string.Empty;
-        foreach (var item in infix)
+        var stack = new Stack<string>();          // Stack of operators (now strings)
+        var postfix = new List<string>();         // Output list of tokens
+        var numberBuilder = new StringBuilder();  // Accumulator for multi-digit/decimal numbers
+
+        foreach (var ch in infix)
         {
-            if (IsOperator(item))
+            if (char.IsDigit(ch) || ch == '.')    // Accepts digits and decimal point
             {
-                if (stack.Count == 0)
-                {
-                    stack.Push(item);
-                }
-                else
-                {
-                    if (item == ')')
-                    {
-                        do
-                        {
-                            postfix += stack.Pop();
-                        } while (stack.Peek() != '(');
-                        stack.Pop();
-                    }
-                    else
-                    {
-                        if (PriorityExpression(item) > PriorityStack(stack.Peek()))
-                        {
-                            stack.Push(item);
-                        }
-                        else
-                        {
-                            postfix += stack.Pop();
-                            stack.Push(item);
-                        }
-                    }
-                }
+                numberBuilder.Append(ch);         // Builds the number
             }
             else
             {
-                postfix += item;
+                if (numberBuilder.Length > 0)     // Add number to output before handling operator
+                {
+                    postfix.Add(numberBuilder.ToString());
+                    numberBuilder.Clear();
+                }
+
+                if (ch == '(')
+                {
+                    stack.Push(ch.ToString());
+                }
+                else if (ch == ')')
+                {
+                    while (stack.Peek() != "(")
+                    {
+                        postfix.Add(stack.Pop());
+                    }
+                    stack.Pop(); 
+                }
+                else if (IsOperator(ch.ToString())) // Changed from char to string
+                {
+                    while (stack.Count > 0 && PriorityExpression(ch) <= PriorityStack(stack.Peek()[0]))
+                    {
+                        postfix.Add(stack.Pop());
+                    }
+                    stack.Push(ch.ToString());
+                }
             }
         }
-        do
+
+        if (numberBuilder.Length > 0)             // Add any remaining number to output
         {
-            postfix += stack.Pop();
-        } while (stack.Count > 0);
+            postfix.Add(numberBuilder.ToString());
+        }
+
+        while (stack.Count > 0)
+        {
+            postfix.Add(stack.Pop());
+        }
+
         return postfix;
     }
 
@@ -116,5 +133,7 @@ public class FunctionEvaluator
         };
     }
 
-    private static bool IsOperator(char item) => "()^*/+-".IndexOf(item) >= 0;
+    // Changed to accept string instead of char
+    private static bool IsOperator(string token) => "()^*/+-".Contains(token);
+    
 }
